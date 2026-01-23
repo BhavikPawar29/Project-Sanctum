@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.database.database_connection import get_db
+from app.db.database_connection import get_db
 from app.models.Tenant import Tenant as TenantModel
 from app.schemas.tenants_schema import Tenant as TenantSchema
 

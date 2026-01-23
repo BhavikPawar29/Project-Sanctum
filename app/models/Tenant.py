@@ -3,7 +3,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 import uuid
 
-from app.database.database_connection import Base
+from app.db.database_connection import Base
 
 class Tenant(Base):
     __tablename__ = "tenants"

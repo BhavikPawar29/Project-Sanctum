@@ -1,18 +1,36 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 
 from app.db.database_connection import get_db
 from app.models.Tenant import Tenant as TenantModel
+from app.models.User import Users as UserModel
+from app.models.TenantMembership import TenantMembership as TenantMembershipModel
 from app.schemas.tenants_schema import Tenant as TenantSchema
+from app.core.security import oauth2_scheme
 
 router = APIRouter(
     prefix="/tenants", 
-    tags=["Tenants"]
-    #dependencies=[Depends(oauth2_scheme)]
+    tags=["Tenants"],
+    dependencies=[Depends(oauth2_scheme)]
 )
 
 @router.post("/create")
-async def create_tenant(payload: TenantSchema, db: Session = Depends(get_db)):
+async def create_tenant(payload: TenantSchema, request: Request, db: Session = Depends(get_db)):
+
+    user_id = request.state.user_id
+
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, 
+            detail="Unauthorized!!!"
+            )
+
+    # if role != "owner":
+    #     raise HTTPException(
+    #         status_code=status.HTTP_403_FORBIDDEN,
+    #         detail="Only owners can create tenants!!!"
+    #     )
+
     
     existing = db.query(
             TenantModel
@@ -22,7 +40,7 @@ async def create_tenant(payload: TenantSchema, db: Session = Depends(get_db)):
     
     if existing:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
+            status_code=status.HTTP_409_CONFLICT,
             detail="Tenant name already exists!!!"
         )
     
@@ -38,6 +56,21 @@ async def create_tenant(payload: TenantSchema, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(tenant)
 
+    user_obj = db.query(
+        UserModel
+    ).filter(
+        UserModel.id == user_id
+    ).first()
+
+    membership = TenantMembershipModel(
+        user=user_obj,
+        tenant=tenant,
+        role="owner"
+    )
+
+    db.add(membership)
+    db.commit()
+
     return {
         "message": "Tenant created successfully",
         "tenant": {
@@ -49,4 +82,5 @@ async def create_tenant(payload: TenantSchema, db: Session = Depends(get_db)):
             "contact": tenant.contact,
             "created_at": tenant.created_at,
         },
+        "role_assigned": "owner"
     }

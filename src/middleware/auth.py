@@ -1,13 +1,13 @@
 from fastapi import Request, status
 from jose import jwt, JWTError
 from fastapi.responses import JSONResponse
-from app.core.security import SECRET_KEY, ALGORITHM
-import logging
+from src.core.security import SECRET_KEY, ALGORITHM
+#import logging
 
 
 PUBLIC_PATHS = {
     "/users/login",
-    "/auth/register",
+    "/users/register",
     "/auth/refresh",
     "/docs",
     "/openapi.json",
@@ -60,7 +60,7 @@ async def auth_middleware(request: Request, call_next):
         role = payload.get("role")
         tenant_id = payload.get("tenant_id")
 
-        if not user_id or not role:
+        if not user_id:
             return JSONResponse(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 content={"detail": "Invalid token payload"}

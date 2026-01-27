@@ -8,7 +8,7 @@ install:
 	$(PIP) install -r requirements.txt
 
 run:
-	uvicorn app.main:app --reload
+	uvicorn src.main:app --reload
 
 freeze:
 	$(PIP) freeze > requirements.txt
@@ -16,5 +16,5 @@ freeze:
 clean:
 	rm -rf .venv __pycache__
 
-# db-check:
-# 	$(PYTHON) -c "from app.database import engine; print('DB Connected!')"
+db-check:
+	$(PYTHON) -c "from app.database import engine; print('DB Connected!')"

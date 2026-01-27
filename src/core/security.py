@@ -4,7 +4,7 @@ from jose import jwt
 from passlib.context import CryptContext
 from fastapi import HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from app.models.User import Users as UserModel
+from src.models.user import Users as UserModel
 
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = os.getenv("ALGORITHM")
@@ -24,42 +24,45 @@ def hash_password(password: str):
 def verify_password(plain: str, hashed: str) -> bool:
     return pwdCrypt.verify(plain, hashed)
 
-def create_access_token(user: UserModel, tenant_id: str, role: str):
-    
+def create_access_token(user: UserModel, tenant_id: str | None = None, role: str | None = None):
     payload = {
         "sub": str(user.id),
-        "role": role,
-        "tenant_id": tenant_id,
         "type": "access",
         "exp": datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     }
 
+    if tenant_id:
+        payload["tenant_id"] = tenant_id
+
+    if role:
+        payload["role"] = role
+
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+
 
 
 def create_refresh_token(user: UserModel):
     
     payload = {
         "sub": str(user.id),
-        "role": user.role,
         "type": "refresh",
         "exp": datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
     }
 
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
-def decode_token(token: str):
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        return payload
+# def decode_token(token: str):
+#     try:
+#         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+#         return payload
     
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token expired"
-        )
-    except jwt.InvalidTokenError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token"
-        )
+#     except jwt.ExpiredSignatureError:
+#         raise HTTPException(
+#             status_code=status.HTTP_401_UNAUTHORIZED,
+#             detail="Token expired"
+#         )
+#     except jwt.InvalidTokenError:
+#         raise HTTPException(
+#             status_code=status.HTTP_401_UNAUTHORIZED,
+#             detail="Invalid token"
+#         )

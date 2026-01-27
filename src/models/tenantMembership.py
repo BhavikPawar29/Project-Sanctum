@@ -3,7 +3,7 @@ import datetime
 from sqlalchemy import Column, DateTime, String, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
-from app.db.database_connection import Base
+from src.db.session import Base
 
 
 class TenantMembership(Base):

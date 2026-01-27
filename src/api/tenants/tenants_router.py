@@ -1,12 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 
-from app.db.database_connection import get_db
-from app.models.Tenant import Tenant as TenantModel
-from app.models.User import Users as UserModel
-from app.models.TenantMembership import TenantMembership as TenantMembershipModel
-from app.schemas.tenants_schema import Tenant as TenantSchema
-from app.core.security import oauth2_scheme
+from src.db.session import get_db
+from src.models.tenant import Tenant as TenantModel
+from src.models.user import Users as UserModel
+from src.models.tenantMembership import TenantMembership as TenantMembershipModel
+from src.schemas.tenants_schema import TenantCreate as TenantCreateSchema
+from src.core.security import oauth2_scheme
 
 router = APIRouter(
     prefix="/tenants", 
@@ -15,7 +15,7 @@ router = APIRouter(
 )
 
 @router.post("/create")
-async def create_tenant(payload: TenantSchema, request: Request, db: Session = Depends(get_db)):
+async def create_tenant(payload: TenantCreateSchema, request: Request, db: Session = Depends(get_db)):
 
     user_id = request.state.user_id
 
@@ -24,13 +24,6 @@ async def create_tenant(payload: TenantSchema, request: Request, db: Session = D
             status_code=status.HTTP_401_UNAUTHORIZED, 
             detail="Unauthorized!!!"
             )
-
-    # if role != "owner":
-    #     raise HTTPException(
-    #         status_code=status.HTTP_403_FORBIDDEN,
-    #         detail="Only owners can create tenants!!!"
-    #     )
-
     
     existing = db.query(
             TenantModel
@@ -53,8 +46,8 @@ async def create_tenant(payload: TenantSchema, request: Request, db: Session = D
     )
 
     db.add(tenant)
-    db.commit()
-    db.refresh(tenant)
+    await db.commit()
+    await db.refresh(tenant)
 
     user_obj = db.query(
         UserModel

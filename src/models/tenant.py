@@ -4,7 +4,7 @@ from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 import uuid
 
-from app.db.database_connection import Base
+from src.db.session import Base
 
 class Tenant(Base):
     __tablename__ = "tenants"

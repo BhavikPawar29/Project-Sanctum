@@ -4,7 +4,7 @@ import uuid
 from sqlalchemy import Boolean, DateTime, String, Column
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
-from app.db.database_connection import Base
+from src.db.session import Base
 
 class Users(Base):
     __tablename__ = "users"

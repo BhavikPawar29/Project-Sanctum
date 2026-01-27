@@ -35,6 +35,8 @@ class UserCreate(UserBase):
 
 class UserPublic(UserBase):
     id: UUID
+    email: EmailStr
+    name: str
     is_verified: bool
     created_at: datetime
 
@@ -43,7 +45,7 @@ class UserPublic(UserBase):
 
 
 class UserMe(UserPublic):
-    tenants: Optional[List["TenantSummary"]] = []
+    tenants: Optional[List["TenantSummary"]] = Field(default_factory=list)
 
 
 from schemas.tenants_schema import TenantSummary

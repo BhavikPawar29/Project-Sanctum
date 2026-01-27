@@ -1,14 +1,15 @@
+from jose import JWTError
 from fastapi import Request, status
-from jose import jwt, JWTError
+
 from fastapi.responses import JSONResponse
-from src.core.security import SECRET_KEY, ALGORITHM
+from src.core.security import decode_token
 #import logging
 
 
 PUBLIC_PATHS = {
     "/users/login",
     "/users/register",
-    "/auth/refresh",
+    "/users/refresh",
     "/docs",
     "/openapi.json",
     "/docs/oauth2-redirect",
@@ -23,6 +24,8 @@ async def auth_middleware(request: Request, call_next):
         return await call_next(request)
     
     auth_header = request.headers.get("Authorization")
+
+    print(f"auth_header {auth_header}")
 
     if not auth_header:
         return JSONResponse(
@@ -46,7 +49,7 @@ async def auth_middleware(request: Request, call_next):
         )
     
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = decode_token(token, expected_type="access")
 
         print(f"JWT PAYLOAD: {payload}")
 

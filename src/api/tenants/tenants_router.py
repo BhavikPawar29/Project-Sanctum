@@ -1,12 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 
 from src.db.session import get_db
-from src.models.tenant import Tenant as TenantModel
-from src.models.user import Users as UserModel
-from src.models.tenantMembership import TenantMembership as TenantMembershipModel
-from src.schemas.tenants_schema import TenantCreate as TenantCreateSchema
 from src.core.security import oauth2_scheme
+from src.models.user import Users as UserModel
+from src.models.tenant import Tenant as TenantModel
+from src.schemas.tenants_schema import TenantCreate as TenantCreateSchema
+from src.models.tenantMembership import TenantMembership as TenantMembershipModel
 
 router = APIRouter(
     prefix="/tenants", 
@@ -15,7 +15,7 @@ router = APIRouter(
 )
 
 @router.post("/create")
-async def create_tenant(payload: TenantCreateSchema, request: Request, db: Session = Depends(get_db)):
+async def create_tenant(payload: TenantCreateSchema, request: Request, db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
 
     user_id = request.state.user_id
 

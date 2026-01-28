@@ -69,13 +69,13 @@ def decode_token(token: str, expected_type: str | None = None):
         if not user_id:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token payload"
+                detail="Invalid token payload!!!"
             )
         
         if expected_type and token_type != expected_type:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=f"Expected {expected_type} token"
+                detail=f"Expected {expected_type} token!!!"
             )
 
         return payload
@@ -83,11 +83,11 @@ def decode_token(token: str, expected_type: str | None = None):
     except jwt.ExpiredSignatureError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token expired"
+            detail="Token expired!!!"
         )
 
     except jwt.InvalidTokenError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token"
+            detail="Invalid token!!!"
         )

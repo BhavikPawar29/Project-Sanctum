@@ -1,8 +1,13 @@
 from jose import JWTError
-from fastapi import Request, status
+from fastapi import Depends, HTTPException, Request, status
 
 from fastapi.responses import JSONResponse
 from src.core.security import decode_token
+
+from sqlalchemy.orm import Session
+from src.db.session import SessionLocal
+from src.models.rbac import Role as RoleModel, Permission as PermissionModel, RolePermission as RolePermissionModel
+
 #import logging
 
 
@@ -15,7 +20,6 @@ PUBLIC_PATHS = {
     "/docs/oauth2-redirect",
     "/media/"
 }
-
 async def auth_middleware(request: Request, call_next):
     
     path = request.url.path
@@ -74,9 +78,38 @@ async def auth_middleware(request: Request, call_next):
             status_code=status.HTTP_401_UNAUTHORIZED,
             content={"detail": "Invalid or expired token"}
         )
+    
+    db: Session = SessionLocal()
+    permissions = []
+
+    try:
+        role = db.query(RoleModel).filter_by(
+            r_name=role,
+            tenant_id=tenant_id
+        ).first()
+
+        if role:
+            perms = db.query(PermissionModel.code).join(
+                RolePermissionModel,
+                RolePermissionModel.permission_id == PermissionModel.id
+            ).filter(
+                RolePermissionModel.role_id == role.id
+            ).all()
+
+            permissions = [p[0] for p in perms]
+
+    finally:
+        db.close()
+
+    print("ROLE FROM TOKEN:", role)
+    print("TENANT:", tenant_id)
+    print("DB ROLE FOUND:", role)
+    print("RESOLVED PERMISSIONS:", permissions)
+
 
     request.state.user_id = user_id
     request.state.role = role
+    request.state.permissions = permissions
     request.state.tenant_id = tenant_id
 
     response = await call_next(request)

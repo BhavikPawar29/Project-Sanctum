@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, TIMESTAMP
+from sqlalchemy import Boolean, Column, Integer, String, TIMESTAMP
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
@@ -16,5 +16,6 @@ class Tenant(Base):
     sector = Column(String, unique=False)
     contact = Column(String, nullable=True)
     created_at = Column(TIMESTAMP, server_default=func.now())
+    is_deleted = Column(Boolean, default=False)
 
     tenant_memberships = relationship("TenantMembership", back_populates="tenant")

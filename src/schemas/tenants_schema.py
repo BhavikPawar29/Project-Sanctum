@@ -12,7 +12,7 @@ class TenantCreate(BaseModel):
     contact: Optional[str] = None
 
 class TenantUpdate(BaseModel):
-    name: Optional[int] = None
+    name: Optional[str] = None
     team_size: Optional[int] = None
     location: Optional[str] = None
     sector: Optional[str] = None
@@ -23,14 +23,14 @@ class TenantPublic(BaseModel):
     id: UUID
     name: str
     owner_id: UUID
-
-
+    
     team_size: Optional[int] = None
     location: Optional[str] = None
     sector: Optional[str] = None
     contact: Optional[str] = None
 
     created_at: datetime
+    role: str
 
     class Config:
         from_attributes = True
@@ -39,3 +39,8 @@ class TenantPublic(BaseModel):
 class TenantSummary(BaseModel):
     id: UUID
     name: str
+    role: str
+
+
+class TenantSwitchRequest(BaseModel):
+    tenant_id: UUID

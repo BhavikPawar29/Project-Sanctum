@@ -18,7 +18,7 @@ router = APIRouter(
 
 
 @router.get("/me", status_code=status.HTTP_200_OK)
-def get_me(request: Request, db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
+def get_me(request: Request, db: Session = Depends(get_db)):
 
     user_id = request.state.user_id
 
@@ -122,8 +122,11 @@ def respond_to_invite(invite_id: UUID, payload: InviteDecisionSchema, request: R
     }
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
-async def logout(request: Request, token: str = Depends(oauth2_scheme)):
+async def logout(request: Request):
     user_id = request.state.user_id
     revoke_refresh_token(str(user_id))
-    return {"message": "Logged out successfully"}
+    
+    return {
+        "message": "Logged out successfully"
+        }
 

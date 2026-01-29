@@ -34,7 +34,6 @@ def list_tenant_requests(tenant_id: UUID, request: Request, db: Session = Depend
         for r in requests
     ]
 
-
 @router.post("/requests/{request_id}/approve", status_code=status.HTTP_201_CREATED)
 def approve_membership_request(request_id: UUID, payload: ApproveRequestSchema, request: Request, db: Session = Depends(get_db)):
     req = db.query(

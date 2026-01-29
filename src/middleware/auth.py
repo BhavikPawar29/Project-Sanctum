@@ -1,5 +1,5 @@
 from jose import JWTError
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import Request, status
 
 from fastapi.responses import JSONResponse
 from src.core.security import decode_token

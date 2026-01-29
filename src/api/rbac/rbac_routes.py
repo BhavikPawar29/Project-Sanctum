@@ -22,7 +22,7 @@ async def create_role(data: RoleCreate, request: Request, db: Session = Depends(
         )
 
     role = RoleModel(
-        r_name=data.r_name,
+        r_name=data.name,
         tenant_id=request.state.tenant_id
     )
     

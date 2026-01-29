@@ -1,14 +1,16 @@
 from uuid import UUID
-from typing import List
 from sqlalchemy.orm import Session
 from fastapi import APIRouter, Depends, HTTPException, status, Request
-
+from src.schemas.invite_schema import InviteResponse
+from src.models.adminInvites import AdminInvite as AdminInviteModel
+from src.services.membership_service import require_tenant_admin
 from src.db.session import get_db
+from src.core.security import oauth2_scheme
 from src.models.user import Users as UserModel
 from src.models.tenant import Tenant as TenantModel
-from src.core.security import create_access_token, oauth2_scheme
 from src.models.tenantMembership import TenantMembership as TenantMembershipModel
-from src.schemas.tenants_schema import TenantCreate as TenantCreateSchema, TenantPublic, TenantSummary, TenantSwitchRequest, TenantUpdate
+from src.schemas.tenants_schema import TenantCreate as TenantCreateSchema, TenantPublic, TenantUpdate
+from src.schemas.team_schema import InviteUserRequest, InviteUserResponse, ListTenantUsersResponse, RemoveUserResponse, UpdateUserRoleRequest, UpdateUserRoleResponse
 
 router = APIRouter(
     prefix="/tenants", 
@@ -80,32 +82,6 @@ async def create_tenant(payload: TenantCreateSchema, request: Request, db: Sessi
         "role_assigned": "owner"
     }
 
-@router.get("/my", response_model=List[TenantSummary], status_code=status.HTTP_200_OK)
-def get_my_tenants(request: Request, db: Session = Depends(get_db)):
-
-    user_id = request.state.user_id
-
-    memberships = db.query(
-        TenantMembershipModel
-    ).filter(
-        TenantMembershipModel.user_id == user_id
-    ).all()
-
-    if not memberships:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Cant find any tenants under this user!!!"
-        )
-
-    return [
-        {
-            "id": m.id,
-            "name": m.tenant.name,
-            "role": m.role
-        }
-
-        for m in memberships
-    ]
 
 @router.get("/tenant_id", response_model=TenantPublic, status_code=status.HTTP_200_OK)
 def get_tenant(tenant_id: UUID, request: Request, db: Session = Depends(get_db)):
@@ -141,11 +117,7 @@ def get_tenant(tenant_id: UUID, request: Request, db: Session = Depends(get_db))
 @router.patch("/{tenant_id}", status_code=status.HTTP_200_OK)
 async def update_tenant(request: Request, tenant_id: UUID, update: TenantUpdate, db: Session = Depends(get_db)):
     
-    if request.state.role != "admin":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only tenant admin can update this tenant!!!"
-        )
+    require_tenant_admin(db, request.state.user_id, tenant_id)
 
     tenant = db.query(
         TenantModel
@@ -176,44 +148,10 @@ async def update_tenant(request: Request, tenant_id: UUID, update: TenantUpdate,
     return tenant
 
 
-
-@router.post("/switch", status_code=status.HTTP_200_OK)
-async def switch_tenant(data: TenantSwitchRequest, request: Request, db: Session = Depends(get_db)):
-
-    user_id = request.state.user_id
-
-    membership = db.query(TenantMembershipModel).filter(
-        TenantMembershipModel.user_id == user_id,
-        TenantMembershipModel.tenant_id == data.tenant_id
-    ).first()
-
-    if not membership:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not member of this tenant!!!"
-        )
-    
-    new_token = create_access_token(
-        user=request.state.user_id,
-        tenant_id=str(membership.tenant_id),
-        role=membership.role
-    )
-
-    return {
-        "access_token": new_token,
-        "tenant_id": str(membership.tenant_id),
-        "role": membership.role
-    }
-
 @router.delete("/{tenant_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_tenant(tenant_id: UUID, request: Request, db: Session = Depends(get_db)):
 
-    if request.state.role != "owner":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only tenant owner can delete this tenant!!!"
-        )
-
+    require_tenant_admin(db, request.state.user_id, tenant_id)
     user_id = request.state.user_id
 
     tenant = db.query(TenantModel).filter(
@@ -243,3 +181,140 @@ async def delete_tenant(tenant_id: UUID, request: Request, db: Session = Depends
     db.commit()
 
     return
+@router.post("/{tenant_id}/invite", response_model=InviteResponse)
+async def invite_user(tenant_id: UUID, payload: InviteUserRequest, request: Request, db: Session = Depends(get_db)):
+    
+    require_tenant_admin(db, request.state.user_id, tenant_id)
+
+    user = db.query(UserModel).filter(
+        UserModel.email == payload.email
+    ).first()
+
+    if not user:
+        raise HTTPException(404, "User does not exist")
+
+    existing_membership = db.query(TenantMembershipModel).filter_by(
+        user_id=user.id,
+        tenant_id=tenant_id
+    ).first()
+
+    if existing_membership:
+        raise HTTPException(409, "User already belongs to tenant")
+
+    existing_invite = db.query(
+        AdminInviteModel
+        ).filter_by(
+            user_id=user.id,
+            tenant_id=tenant_id,
+            status="PENDING"
+        ).first()
+
+    if existing_invite:
+        raise HTTPException(409, "Invite already pending")
+
+    invite = AdminInviteModel(
+        user_id=user.id,
+        tenant_id=tenant_id,
+        role=payload.role,
+        invited_by=request.state.user_id
+    )
+
+    db.add(invite)
+    db.commit()
+    db.refresh(invite)
+
+    return {
+        "invite_id": invite.id,
+        "tenant_id": tenant_id,
+        "user_id": user.id,
+        "role": invite.role,
+        "status": invite.status
+    }
+
+@router.get("/{tenant_id}/users", response_model=ListTenantUsersResponse, status_code=status.HTTP_200_OK)
+def list_tenant_users(tenant_id: UUID, request: Request, db: Session = Depends(get_db)):
+    membership = db.query(
+        TenantMembershipModel
+    ).filter(
+        TenantMembershipModel.user_id==request.state.user_id,
+        TenantMembershipModel.tenant_id==tenant_id
+    ).first()
+
+    if not membership:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Not a member of this tenant!!!"
+        )
+    
+    members = db.query(
+        TenantMembershipModel
+    ).filter(
+        TenantMembershipModel.tenant_id==tenant_id
+    ).all()
+
+    return {
+        "tenant_id": str(tenant_id),
+        "count": len(members),
+        "users": [
+            {
+                "user_id": str(m.user.id),
+                "email": m.user.email,
+                "name": m.user.name,
+                "role": m.role,
+                "joined_at": m.joined_at
+            }
+            for m in members
+        ]
+    }
+
+@router.put("/users/{user_id}/role", response_model=UpdateUserRoleResponse, status_code=status.HTTP_200_OK)
+async def update_user_role(user_id: UUID, payload: UpdateUserRoleRequest, request: Request, db: Session = Depends(get_db)):
+    tenant_id = payload.tenant_id
+    new_role = payload.new_role
+
+    require_tenant_admin(db, request.state.user_id, tenant_id)
+
+    membership = db.query(TenantMembershipModel).filter_by(
+        user_id=user_id,
+        tenant_id=tenant_id
+    ).first()
+
+    if not membership:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not in tenant"
+            )
+
+    membership.role = new_role
+    db.commit()
+
+    return {
+        "status": "updated",
+        "user_id": str(user_id),
+        "tenant_id": str(tenant_id),
+        "new_role": new_role
+    }
+
+@router.delete("/users/{user_id}", response_model=RemoveUserResponse, status_code=status.HTTP_200_OK)
+async def remove_user_from_tenant( user_id: UUID, tenant_id: UUID, request: Request, db: Session = Depends(get_db)):
+    require_tenant_admin(db, request.state.user_id, tenant_id)
+
+    membership = db.query(TenantMembershipModel).filter_by(
+        user_id=user_id,
+        tenant_id=tenant_id
+    ).first()
+
+    if not membership:
+        raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found in tenant"
+            )
+
+    db.delete(membership)
+    db.commit()
+
+    return {
+        "status": "removed",
+        "user_id": str(user_id),
+        "tenant_id": str(tenant_id)
+    }

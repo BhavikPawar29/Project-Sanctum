@@ -25,9 +25,9 @@ def hash_password(password: str):
 def verify_password(plain: str, hashed: str) -> bool:
     return pwdCrypt.verify(plain, hashed)
 
-def create_access_token(user: UserModel, tenant_id: str | None = None, role: str | None = None):
+def create_access_token(user_id: str, tenant_id: str | None = None, role: str | None = None):
     payload = {
-        "sub": str(user.id),
+        "sub": user_id,
         "type": "access",
         "exp": datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     }

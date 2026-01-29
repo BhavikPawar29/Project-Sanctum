@@ -8,7 +8,7 @@ from src.models.rbac import Permission as PermissionModel, Role as RoleModel, Ro
 
 router = APIRouter(
     prefix="/roles", 
-    tags=["Roles"],
+    tags=["Roles (Admin/Owner)"],
     dependencies=[Depends(oauth2_scheme)]
 )
 
@@ -130,7 +130,6 @@ async def update_role(role_id: UUID, update: RoleUpdate, request: Request, db: S
 
 @router.delete("/{role_id}")
 def delete_role(role_id: UUID, request: Request, db: Session = Depends(get_db)):
-    
 
     if "role.delete" not in request.state.permissions:
          raise HTTPException(

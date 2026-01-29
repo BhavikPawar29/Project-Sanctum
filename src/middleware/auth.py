@@ -15,6 +15,8 @@ PUBLIC_PATHS = {
     "/users/login",
     "/users/register",
     "/users/refresh",
+    "/users/forgot-password",
+    "/users/reset-password",
     "/docs",
     "/openapi.json",
     "/docs/oauth2-redirect",
@@ -29,7 +31,7 @@ async def auth_middleware(request: Request, call_next):
     
     auth_header = request.headers.get("Authorization")
 
-    print(f"auth_header {auth_header}")
+    #print(f"auth_header {auth_header}")
 
     if not auth_header:
         return JSONResponse(
@@ -55,7 +57,7 @@ async def auth_middleware(request: Request, call_next):
     try:
         payload = decode_token(token, expected_type="access")
 
-        print(f"JWT PAYLOAD: {payload}")
+        #print(f"JWT PAYLOAD: {payload}")
 
         if payload.get("type") != "access":
             return JSONResponse(
@@ -64,7 +66,7 @@ async def auth_middleware(request: Request, call_next):
             )
 
         user_id = payload.get("sub")
-        role = payload.get("role")
+        role_name = payload.get("role")
         tenant_id = payload.get("tenant_id")
 
         if not user_id:
@@ -84,7 +86,7 @@ async def auth_middleware(request: Request, call_next):
 
     try:
         role = db.query(RoleModel).filter_by(
-            r_name=role,
+            r_name=role_name,
             tenant_id=tenant_id
         ).first()
 
@@ -101,14 +103,8 @@ async def auth_middleware(request: Request, call_next):
     finally:
         db.close()
 
-    print("ROLE FROM TOKEN:", role)
-    print("TENANT:", tenant_id)
-    print("DB ROLE FOUND:", role)
-    print("RESOLVED PERMISSIONS:", permissions)
-
-
     request.state.user_id = user_id
-    request.state.role = role
+    request.state.role = role_name
     request.state.permissions = permissions
     request.state.tenant_id = tenant_id
 

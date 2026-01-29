@@ -8,7 +8,7 @@ class UserBase(BaseModel):
     email: EmailStr
 
 class UserCreate(UserBase):
-    password: SecretStr = Field(..., min_length=8)
+    password: SecretStr = Field(..., min_length=10)
 
     
     @field_validator("password")

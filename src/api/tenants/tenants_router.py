@@ -12,6 +12,8 @@ from src.models.tenant import Tenant as TenantModel
 from src.models.tenantMembership import TenantMembership as TenantMembershipModel
 from src.schemas.tenants_schema import TenantCreate as TenantCreateSchema, TenantOut, TenantPublic, TenantUpdate
 from src.schemas.team_schema import InviteUserRequest, ListTenantUsersResponse, RemoveUserResponse, UpdateUserRoleRequest, UpdateUserRoleResponse
+from src.db.transactions import transactional
+
 
 router = APIRouter(
     prefix="/tenants", 
@@ -42,34 +44,39 @@ async def create_tenant(payload: TenantCreateSchema, request: Request, db: Sessi
             detail="Tenant name already exists!!!"
         )
     
-    tenant = TenantModel(
-        name=payload.name,
-        team_size=payload.team_size,
-        location=payload.location,
-        sector=payload.sector,
-        contact=payload.contact
-    )
+    with transactional(db):
 
-    db.add(tenant)
-    db.commit()
-    db.refresh(tenant)
+        tenant = TenantModel(
+            name=payload.name,
+            team_size=payload.team_size,
+            location=payload.location,
+            sector=payload.sector,
+            contact=payload.contact
+        )
 
-    user_obj = db.query(
-        UserModel
-    ).filter(
-        UserModel.id == user_id
-    ).first()
+        db.add(tenant)
+        db.flush()
+        db.refresh(tenant)
 
-    membership = TenantMembershipModel(
-        user=user_obj,
-        tenant=tenant,
-        role="owner"
-    )
+        user_obj = db.query(UserModel).filter(
+            UserModel.id == user_id
+        ).first()
 
-    db.add(membership)
-    db.commit()
+        membership = TenantMembershipModel(
+            user=user_obj,
+            tenant=tenant,
+            role="owner"
+        )
 
-    log_audit_event(db , action="membertenant.create", resource=f"tenant:{str(tenant.id)}", request=request)
+        db.add(membership)
+
+        log_audit_event(
+            db,
+            action="tenant.create",
+            resource=f"tenant:{tenant.id}",
+            request=request
+        )
+
 
     return {
         "message": "Tenant created successfully",
@@ -153,13 +160,19 @@ async def update_tenant(request: Request, tenant_id: UUID, update: TenantUpdate,
             detail="No fields provided for update!"
         )
 
-    for field, value in update_data.items():
-        setattr(tenant, field, value) # --> tenant.filed = value
+    with transactional(db):
+        for field, value in update_data.items():
+            setattr(tenant, field, value) # --> tenant.filed = value
 
-    db.commit()
-    db.refresh(tenant)
+        db.flush()
+        db.refresh(tenant)
 
-    log_audit_event(db , action="tenant.update", resource=f"tenant:{str(tenant.id)}", request=request)
+        log_audit_event(
+            db, 
+            action="tenant.update", 
+            resource=f"tenant:{str(tenant.id)}", 
+            request=request
+        )
 
     return tenant
 
@@ -191,10 +204,16 @@ async def delete_tenant(tenant_id: UUID, request: Request, db: Session = Depends
             detail="You are not a member of this tenant!!!"
         )
     
-    tenant.is_deleted = True
+    with transactional(db):
+        tenant.is_deleted = True
 
-    db.commit()
-    log_audit_event(db , action="tenant.delete", resource=f"role:{str(tenant.id)}", request=request)
+        log_audit_event(
+            db, 
+            action="tenant.delete", 
+            resource=f"role:{str(tenant.id)}", 
+            request=request
+        )
+
     return
 
 @router.post("/{tenant_id}/invite", response_model=InviteResponse)
@@ -228,18 +247,25 @@ async def invite_user(tenant_id: UUID, payload: InviteUserRequest, request: Requ
     if existing_invite:
         raise HTTPException(409, "Invite already pending")
 
-    invite = AdminInviteModel(
-        user_id=user.id,
-        tenant_id=tenant_id,
-        role=payload.role,
-        invited_by=request.state.user_id
-    )
 
-    db.add(invite)
-    db.commit()
-    db.refresh(invite)
+    with transactional(db):
+        invite = AdminInviteModel(
+            user_id=user.id,
+            tenant_id=tenant_id,
+            role=payload.role,
+            invited_by=request.state.user_id
+        )
 
-    log_audit_event(db , action="membership.update_role", resource=f"user:{str(user.id)}", request=request)
+        db.add(invite)
+        db.flush()
+        db.refresh(invite)
+
+        log_audit_event(
+            db, 
+            action="membership.invite", 
+            resource=f"user:{str(user.id)}", 
+            request=request
+        )
 
     return {
         "invite_id": invite.id,
@@ -303,10 +329,16 @@ async def update_user_role(user_id: UUID, payload: UpdateUserRoleRequest, reques
             detail="User not in tenant"
             )
 
-    membership.role = new_role
-    db.commit()
+    with transactional(db):
 
-    log_audit_event(db , action="membership.change_role", resource=f"user:{str(user_id)}", request=request)
+        membership.role = new_role
+
+        log_audit_event(
+            db,
+            action="membership.change_role",
+            resource=f"user:{user_id}",
+            request=request
+        )
 
     return {
         "status": "updated",
@@ -330,10 +362,15 @@ async def remove_user_from_tenant( user_id: UUID, tenant_id: UUID, request: Requ
                 detail="User not found in tenant"
             )
 
-    db.delete(membership)
-    db.commit()
+    with transactional(db):
+        db.delete(membership)
 
-    log_audit_event(db , action="membership.remove", resource=f"role:{str(user_id)}", request=request)
+        log_audit_event(
+            db, 
+            action="membership.remove", 
+            resource=f"role:{str(user_id)}", 
+            request=request
+        )
 
     return {
         "status": "removed",

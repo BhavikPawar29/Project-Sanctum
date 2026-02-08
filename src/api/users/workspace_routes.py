@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from typing import List
+from src.db.transactions import transactional
 from src.schemas.membership_schema import MembershipAddRequest, MembershipRequestResponse
 from src.services.membership_service import create_member_request
 from src.core.security import create_access_token, oauth2_scheme
@@ -44,11 +45,12 @@ async def request_membership(request: Request, request_in: MembershipAddRequest,
             detail="User with same ID already a member!!!"
         )
     
-    member_request = create_member_request(
-                        db, 
-                        request.state.user_id, 
-                        request_in.tenant_id
-                    )
+    with transactional(db):
+        member_request = create_member_request(
+            db,
+            user_id,
+            request_in.tenant_id
+        )
     
     return member_request
 
@@ -69,7 +71,7 @@ def get_my_tenants(request: Request, db: Session = Depends(get_db)):
 
     return [
         {
-            "id": m.id,
+            "id": m.tenant_id,
             "name": m.tenant.name,
             "role": m.role
         }

@@ -1,6 +1,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
+from src.db.transactions import transactional
 from src.services.audit_service import log_audit_event
 from src.db.session import get_db
 from src.schemas.auth_schema import ForgotPasswordRequest, RegisterRequest, ResetPasswordRequest, TokenResponse
@@ -42,7 +43,7 @@ async def login (request: Request, form_data: OAuth2PasswordRequestForm = Depend
     if membership:
         token = create_access_token(
             user_id=str(db_user.id),
-            tenant_id=str(membership.tenant_id),
+            tenant_id=str(membership.tenant_id) if membership else None,
             role=membership.role
         )
     else:
@@ -50,12 +51,16 @@ async def login (request: Request, form_data: OAuth2PasswordRequestForm = Depend
 
     refresh_token = create_refresh_token(user=db_user)
 
-    print(token)
-    print(refresh_token)
-
     store_refresh_token(db_user.id, refresh_token)
 
-    log_audit_event(db , action="auth.login", resource=f"user:{str(db_user.id)}", request=request, tenant_id=str(membership.tenant_id), user_id=str(db_user.id))
+    log_audit_event(
+        db, 
+        action="auth.login", 
+        resource=f"user:{str(db_user.id)}", 
+        request=request, 
+        tenant_id=str(membership.tenant_id), 
+        user_id=str(db_user.id)
+    )
 
     return {
         "access_token": token,
@@ -81,9 +86,10 @@ async def register(data: RegisterRequest, db: Session = Depends(get_db)):
     )
 
 
-    db.add(user)
-    db.commit()
-    db.refresh(user)
+    with transactional(db):
+        db.add(user)
+        db.flush()
+        db.refresh(user)
 
     token = create_access_token(user_id=str(user.id))
     refresh_token = create_refresh_token(user=user)
@@ -140,7 +146,7 @@ async def forgot_password(data: ForgotPasswordRequest, db: Session = Depends(get
     user = db.query(UserModel).filter(UserModel.email == data.email).first()
 
     if not user:
-        return HTTPException(
+        raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail= {"message": "If account exists, reset link sent"}
         )
@@ -166,9 +172,8 @@ async def reset_password(data: ResetPasswordRequest, db: Session = Depends(get_d
                 detail="User not found"
             )
 
-    user.password = hash_password(data.new_password)
-
-    db.commit()
+    with transactional(db):
+        user.password = hash_password(data.new_password)
 
     return {
         "message": "Password reset successful"

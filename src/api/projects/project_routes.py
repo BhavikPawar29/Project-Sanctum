@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from typing import List
 
+from db.transactions import transactional
 from src.services.audit_service import log_audit_event
 from src.db.session import get_db
 from src.models.projects import Project as ProjectModel
@@ -31,11 +32,18 @@ def create_project(payload: ProjectCreate,request: Request ,ctx = Depends(requir
             detail="Project not created!!!"
         )
 
-    db.add(project)
-    db.commit()
-    db.refresh(project)
+    with transactional(db):
 
-    log_audit_event(db , action="project.create", resource=f"project:{str(project.id)}", request=request)
+        db.add(project)
+        db.flush()
+        db.refresh(project)
+
+        log_audit_event(
+            db,
+            action="project.create",
+            resource=f"project:{str(project.id)}",
+            request=request
+        )
 
     return project
 
@@ -81,15 +89,21 @@ def update_project(project_id: UUID, request: Request, payload: ProjectUpdate, c
             detail="Project not found!!!"
         )
 
-    update_data = payload.dict(exclude_unset=True)
+    with transactional():
+        update_data = payload.dict(exclude_unset=True)
 
-    for key, value in update_data.items():
-        setattr(project, key, value)
+        for key, value in update_data.items():
+            setattr(project, key, value)
 
-    db.commit()
-    db.refresh(project)
+        db.flush()
+        db.refresh(project)
 
-    log_audit_event(db , action="project.update", resource=f"project:{str(project.id)}", request=request)
+        log_audit_event(
+            db, 
+            action="project.update", 
+            resource=f"project:{str(project.id)}", 
+            request=request
+        )
 
     return project
 
@@ -108,10 +122,15 @@ def delete_project(project_id: UUID, request: Request, ctx = Depends(require_per
             detail="Project not found!!!"
         )
 
-    db.delete(project)
-    db.commit()
+    with transactional(db):
+        db.delete(project)
 
-    log_audit_event(db , action="project.create", resource=f"project:{str(project.id)}", request=request)
+        log_audit_event(
+            db, 
+            action="project.deleted", 
+            resource=f"project:{str(project.id)}", 
+            request=request
+        )
 
     return {
         "status": "deleted"

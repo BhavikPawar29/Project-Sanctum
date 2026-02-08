@@ -1,4 +1,5 @@
 from uuid import UUID
+from src.db.transactions import transactional
 from src.services.audit_service import log_audit_event
 from src.db.session import get_db
 from sqlalchemy.orm import Session
@@ -33,27 +34,28 @@ async def create_role(data: RoleCreate, request: Request, db: Session = Depends(
             detail="Role not created!!!"
         )
     
-    db.add(role)
-    db.flush()
+    with transactional(db):
 
-    perms = db.query(
-        PermissionModel
-    ).filter(
-        PermissionModel.code.in_(data.permissions)
-    ).all()
+        db.add(role)
+        db.flush()
 
+        perms = db.query(PermissionModel).filter(
+            PermissionModel.code.in_(data.permissions)
+        ).all()
 
-    for p in perms:
-        db.add(RolePermissionModel
-            (
-            role_id=role.id, 
-            permission_id=p.id
-            )
+        for p in perms:
+            db.add(RolePermissionModel(
+                role_id=role.id,
+                permission_id=p.id
+            ))
+
+        log_audit_event(
+            db,
+            action="role.create",
+            resource=f"role:{role.id}",
+            request=request
         )
 
-    db.commit()
-    log_audit_event(db , action="role.create", resource=f"role:{role.id}", request=request)
-    
     return {
         "role_id": 
         role.id
@@ -102,31 +104,33 @@ async def update_role(role_id: UUID, update: RoleUpdate, request: Request, db: S
             detail="No data provided for update!!!"
         )
     
-    if update.r_name:
-        role.r_name = update.r_name
+    with transactional(db):
 
-    if update.permissions:
-        db.query(
-            RolePermissionModel
-        ).filter_by(
-            role_id=role.id
-        ).delete()
+        if update.r_name:
+            role.r_name = update.r_name
 
+        if update.permissions:
+            db.query(RolePermissionModel).filter_by(
+                role_id=role.id
+            ).delete()
 
-        perms = db.query(PermissionModel).filter(
+            perms = db.query(PermissionModel).filter(
                 PermissionModel.code.in_(update.permissions)
             ).all()
 
-        for p in perms:
-            db.add(
-                RolePermissionModel(
-                    role_id=role.id, 
+            for p in perms:
+                db.add(RolePermissionModel(
+                    role_id=role.id,
                     permission_id=p.id
-                    )
-                )
-        
-    db.commit()
-    log_audit_event(db , action="role.update", resource=f"role:{role.id}", request=request)
+                ))
+
+        log_audit_event(
+            db,
+            action="role.update",
+            resource=f"role:{role.id}",
+            request=request
+        )
+
 
     return {
         "status": "Updated"
@@ -152,10 +156,15 @@ def delete_role(role_id: UUID, request: Request, db: Session = Depends(get_db)):
             detail="Role not found!!!"
         )
 
-    db.delete(role)
-    db.commit()
+    with transactional(db):
+        db.delete(role)
 
-    log_audit_event(db , action="role.delete", resource=f"role:{role.id}", request=request)
+        log_audit_event(
+            db, 
+            action="role.delete", 
+            resource=f"role:{role.id}", 
+            request=request
+        )
 
     return {
         "status": "deleted"
@@ -181,16 +190,23 @@ def assign_role(data: AssignRoleRequest, request: Request, db: Session = Depends
             detail="Role not found"
             )
 
-    assignment = UserRoleModel(
-        user_id=data.user_id,
-        role_id=role.id,
-        tenant_id=request.state.tenant_id
-    )
+    with transactional(db):
 
-    db.merge(assignment)
-    db.commit()
+        assignment = UserRoleModel(
+            user_id=data.user_id,
+            role_id=role.id,
+            tenant_id=request.state.tenant_id
+        )
 
-    log_audit_event(db , action="role.assign", resource=f"user:{data.user_id}", request=request)
+        db.merge(assignment)
+
+        log_audit_event(
+            db,
+            action="role.assign",
+            resource=f"user:{data.user_id}",
+            request=request
+        )
+
 
     return {
         "status": "assigned"

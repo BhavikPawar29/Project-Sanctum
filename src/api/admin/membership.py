@@ -1,6 +1,7 @@
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
+from src.db.transactions import transactional
 from src.core.security import oauth2_scheme
 from src.db.session import get_db
 from src.models.memberRequest import MemberRequest as MemberRequestModel
@@ -57,12 +58,13 @@ def approve_membership_request(request_id: UUID, payload: ApproveRequestSchema, 
     
     require_tenant_admin(db, request.state.user_id, req.tenant_id)
 
-    updated = approve_request(
-        db=db,
-        req=req,
-        admin_id=request.state.user_id,
-        note=payload.note
-    )
+    with transactional(db):
+        updated = approve_request(
+            db=db,
+            req=req,
+            admin_id=request.state.user_id,
+            note=payload.note
+        )
 
     log_audit_event(db , action="membership_request.approved", resource=f"user:{updated.user_id}", request=request)
 
@@ -90,12 +92,13 @@ def reject_membership_request(request_id: UUID, payload: RejectRequestSchema, re
 
     require_tenant_admin(db, request.state.user_id, req.tenant_id)
 
-    updated = reject_request(
-        db=db,
-        req=req,
-        admin_id=request.state.user_id,
-        note=payload.note
-    )
+    with transactional(db):
+        updated = reject_request(
+            db=db,
+            req=req,
+            admin_id=request.state.user_id,
+            note=payload.note
+        )
 
     log_audit_event(db , action="membership_request.rejected", resource=f"user:{updated.user_id}", request=request)
 

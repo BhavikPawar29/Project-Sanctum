@@ -1,6 +1,7 @@
 from uuid import UUID
 from sqlalchemy.orm import Session
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from src.db.transactions import transactional
 from src.services.audit_service import log_audit_event
 from src.schemas.invite_schema import InviteDecisionSchema
 from src.models.adminInvites import AdminInvite as AdminInviteModel
@@ -89,32 +90,32 @@ def respond_to_invite(invite_id: UUID, payload: InviteDecisionSchema, request: R
             detail="Invite not found!!!"
         )
 
-    if invite.user_id != UUID(request.state.user_id):
+    if str(invite.user_id) != request.state.user_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, 
             detail="Not your invite!!!"
         )
         
-
     if invite.status != "PENDING":
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, 
             detail="Invite already processed!!!"
         )
 
-    invite.status = "ACCEPTED" if payload.accept else "REJECTED"
-    invite.note = payload.note
-    invite.decision_at = datetime.utcnow()
+    with transactional(db):
 
-    if payload.accept:
-        membership = TenantMembershipModel(
-            user_id=invite.user_id,
-            tenant_id=invite.tenant_id,
-            role=invite.role
-        )
-        db.add(membership)
+        invite.status = "ACCEPTED" if payload.accept else "REJECTED"
+        invite.note = payload.note
+        invite.decision_at = datetime.utcnow()
 
-    db.commit()
+        if payload.accept:
+            membership = TenantMembershipModel(
+                user_id=invite.user_id,
+                tenant_id=invite.tenant_id,
+                role=invite.role
+            )
+            db.add(membership)
+
 
     return {
         "status": invite.status,

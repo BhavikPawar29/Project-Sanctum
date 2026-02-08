@@ -26,7 +26,7 @@ def create_member_request(db: Session, user_id, tenant_id):
         status="PENDING"
     )
     db.add(req)
-    db.commit()
+    db.flush()
     db.refresh(req)
     return req
 
@@ -44,7 +44,7 @@ def approve_request(db: Session, req, admin_id, note=None):
     )
 
     db.add(membership)
-    db.commit()
+    db.flush()
 
     return req
 
@@ -55,5 +55,5 @@ def reject_request(db: Session, req, admin_id, note):
     req.decision_at = datetime.utcnow()
     req.decided_by = admin_id
 
-    db.commit()
+    db.flush()
     return req

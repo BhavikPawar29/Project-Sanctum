@@ -7,6 +7,7 @@ from src.models.memberRequest import MemberRequest as MemberRequestModel
 from src.schemas.membership_schema import ApproveRequestSchema, RejectRequestSchema
 from src.services.membership_service import approve_request, reject_request
 from src.services.membership_service import require_tenant_admin
+from src.services.audit_service import log_audit_event
 
 router = APIRouter(
     prefix="/membership",
@@ -63,6 +64,8 @@ def approve_membership_request(request_id: UUID, payload: ApproveRequestSchema, 
         note=payload.note
     )
 
+    log_audit_event(db , action="membership_request.approved", resource=f"user:{updated.user_id}", request=request)
+
     return {
         "status": updated.status,
         "tenant_id": updated.tenant_id,
@@ -93,6 +96,8 @@ def reject_membership_request(request_id: UUID, payload: RejectRequestSchema, re
         admin_id=request.state.user_id,
         note=payload.note
     )
+
+    log_audit_event(db , action="membership_request.rejected", resource=f"user:{updated.user_id}", request=request)
 
     return {
         "status": updated.status,

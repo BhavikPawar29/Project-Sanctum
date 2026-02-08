@@ -1,6 +1,7 @@
 from uuid import UUID
 from sqlalchemy.orm import Session
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from src.services.audit_service import log_audit_event
 from src.schemas.invite_schema import InviteDecisionSchema
 from src.models.adminInvites import AdminInvite as AdminInviteModel
 from src.db.session import get_db
@@ -122,9 +123,11 @@ def respond_to_invite(invite_id: UUID, payload: InviteDecisionSchema, request: R
     }
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
-async def logout(request: Request):
+async def logout(request: Request, db: Session = Depends(get_db)):
     user_id = request.state.user_id
     revoke_refresh_token(str(user_id))
+
+    log_audit_event(db , action="auth.logout", resource=f"user:{user_id}", request=request)
     
     return {
         "message": "Logged out successfully"

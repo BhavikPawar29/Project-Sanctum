@@ -1,8 +1,9 @@
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from typing import List
 
+from src.services.audit_service import log_audit_event
 from src.db.session import get_db
 from src.models.projects import Project as ProjectModel
 from src.schemas.project_schema import ProjectCreate, ProjectUpdate, ProjectResponse
@@ -16,7 +17,7 @@ router = APIRouter(
 )
 
 @router.post("", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
-def create_project(payload: ProjectCreate, ctx = Depends(require_permission("project.create")), db: Session = Depends(get_db)):
+def create_project(payload: ProjectCreate,request: Request ,ctx = Depends(require_permission("project.create")), db: Session = Depends(get_db)):
     project = ProjectModel(
         tenant_id=ctx.tenant_id,
         name=payload.name,
@@ -33,6 +34,8 @@ def create_project(payload: ProjectCreate, ctx = Depends(require_permission("pro
     db.add(project)
     db.commit()
     db.refresh(project)
+
+    log_audit_event(db , action="project.create", resource=f"project:{str(project.id)}", request=request)
 
     return project
 
@@ -65,7 +68,7 @@ def get_project(project_id: UUID, ctx = Depends(require_permission("project.view
 
 
 @router.patch("/{project_id}", response_model=ProjectResponse)
-def update_project(project_id: UUID, payload: ProjectUpdate, ctx = Depends(require_permission("project.update")), db: Session = Depends(get_db)):
+def update_project(project_id: UUID, request: Request, payload: ProjectUpdate, ctx = Depends(require_permission("project.update")), db: Session = Depends(get_db)):
     
     project = db.query(ProjectModel).filter(
         ProjectModel.id == project_id,
@@ -86,11 +89,13 @@ def update_project(project_id: UUID, payload: ProjectUpdate, ctx = Depends(requi
     db.commit()
     db.refresh(project)
 
+    log_audit_event(db , action="project.update", resource=f"project:{str(project.id)}", request=request)
+
     return project
 
 
 @router.delete("/{project_id}")
-def delete_project(project_id: UUID, ctx = Depends(require_permission("project.delete")), db: Session = Depends(get_db)):
+def delete_project(project_id: UUID, request: Request, ctx = Depends(require_permission("project.delete")), db: Session = Depends(get_db)):
     
     project = db.query(ProjectModel).filter(
         ProjectModel.id == project_id,
@@ -105,6 +110,8 @@ def delete_project(project_id: UUID, ctx = Depends(require_permission("project.d
 
     db.delete(project)
     db.commit()
+
+    log_audit_event(db , action="project.create", resource=f"project:{str(project.id)}", request=request)
 
     return {
         "status": "deleted"

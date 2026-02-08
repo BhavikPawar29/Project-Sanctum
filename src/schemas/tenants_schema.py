@@ -1,5 +1,5 @@
 from uuid import UUID
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional
 from datetime import datetime
 
@@ -44,3 +44,15 @@ class TenantSummary(BaseModel):
 
 class TenantSwitchRequest(BaseModel):
     tenant_id: UUID
+
+
+class TenantOut(BaseModel):
+    id: UUID
+    name: str
+    team_size: int
+    location: str | None
+    sector: str | None
+    contact: str | None
+    is_deleted: bool
+
+    model_config = ConfigDict(from_attributes=True)  # Pydantic v2

@@ -1,4 +1,5 @@
 from uuid import UUID
+from src.services.audit_service import log_audit_event
 from src.db.session import get_db
 from sqlalchemy.orm import Session
 from src.core.security import oauth2_scheme
@@ -51,6 +52,8 @@ async def create_role(data: RoleCreate, request: Request, db: Session = Depends(
         )
 
     db.commit()
+    log_audit_event(db , action="role.create", resource=f"role:{role.id}", request=request)
+    
     return {
         "role_id": 
         role.id
@@ -123,6 +126,7 @@ async def update_role(role_id: UUID, update: RoleUpdate, request: Request, db: S
                 )
         
     db.commit()
+    log_audit_event(db , action="role.update", resource=f"role:{role.id}", request=request)
 
     return {
         "status": "Updated"
@@ -151,9 +155,12 @@ def delete_role(role_id: UUID, request: Request, db: Session = Depends(get_db)):
     db.delete(role)
     db.commit()
 
+    log_audit_event(db , action="role.delete", resource=f"role:{role.id}", request=request)
+
     return {
         "status": "deleted"
         }
+
 @router.post("/assign-user")
 def assign_role(data: AssignRoleRequest, request: Request, db: Session = Depends(get_db)):
     
@@ -182,6 +189,8 @@ def assign_role(data: AssignRoleRequest, request: Request, db: Session = Depends
 
     db.merge(assignment)
     db.commit()
+
+    log_audit_event(db , action="role.assign", resource=f"user:{data.user_id}", request=request)
 
     return {
         "status": "assigned"

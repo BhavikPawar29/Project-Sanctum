@@ -1,6 +1,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
+from src.services.audit_service import log_audit_event
 from src.db.session import get_db
 from src.schemas.auth_schema import ForgotPasswordRequest, RegisterRequest, ResetPasswordRequest, TokenResponse
 from src.services.redis_tokens import get_refresh_token, store_refresh_token
@@ -8,6 +9,8 @@ from src.core.security import create_password_reset_token, create_refresh_token,
 from sqlalchemy.orm import Session
 from src.models.user import Users as UserModel
 from src.models.tenantMembership import TenantMembership as TenantMembershipModel
+
+from fastapi import Request
 
 router = APIRouter(
     prefix="/users", 
@@ -22,7 +25,7 @@ def _load_user(db: Session, email: str):
         ).first()
 
 @router.post("/login", status_code=status.HTTP_200_OK)
-async def login (form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+async def login (request: Request, form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     
     db_user = _load_user(db, form_data.username)
 
@@ -47,7 +50,12 @@ async def login (form_data: OAuth2PasswordRequestForm = Depends(), db: Session =
 
     refresh_token = create_refresh_token(user=db_user)
 
+    print(token)
+    print(refresh_token)
+
     store_refresh_token(db_user.id, refresh_token)
+
+    log_audit_event(db , action="auth.login", resource=f"user:{str(db_user.id)}", request=request, tenant_id=str(membership.tenant_id), user_id=str(db_user.id))
 
     return {
         "access_token": token,
@@ -77,7 +85,7 @@ async def register(data: RegisterRequest, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(user)
 
-    token = create_access_token(user=user.id)
+    token = create_access_token(user_id=str(user.id))
     refresh_token = create_refresh_token(user=user)
 
     store_refresh_token(user.id, refresh_token)
@@ -115,7 +123,7 @@ async def refresh_token(refresh_token: str, db: Session = Depends(get_db)):
     tenant_id = str(membership.tenant_id) if membership else None
     role = membership.role if membership else None
 
-    new_access = create_access_token(user.id, tenant_id, role)
+    new_access = create_access_token(str(user.id), tenant_id, role)
     new_refresh = create_refresh_token(user)
 
     store_refresh_token(user_id, new_refresh)

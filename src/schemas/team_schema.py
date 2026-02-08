@@ -8,11 +8,11 @@ class InviteUserRequest(BaseModel):
     role: str = "member"
 
 
-class InviteUserResponse(BaseModel):
-    status: str
-    user_id: UUID
-    tenant_id: UUID
-    role: str
+# class InviteUserResponse(BaseModel):
+#     status: str
+#     user_id: UUID
+#     tenant_id: UUID
+#     role: str
 
 class TenantUser(BaseModel):
     user_id: UUID

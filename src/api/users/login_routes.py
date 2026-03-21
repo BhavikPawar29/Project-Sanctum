@@ -146,17 +146,14 @@ async def forgot_password(data: ForgotPasswordRequest, db: Session = Depends(get
     user = db.query(UserModel).filter(UserModel.email == data.email).first()
 
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail= {"message": "If account exists, reset link sent"}
-        )
+        return {"message": "If account exists, reset link sent"}
 
     reset_token = create_password_reset_token(str(user.id))
 
     return {
-        "message": "Reset link sent",
+        "message": "If account exists, reset link sent",
         "reset_token": reset_token
-        }
+    }
 
 @router.post("/reset-password", status_code=status.HTTP_205_RESET_CONTENT)
 async def reset_password(data: ResetPasswordRequest, db: Session = Depends(get_db)):
